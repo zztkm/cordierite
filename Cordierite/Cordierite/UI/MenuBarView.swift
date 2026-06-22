@@ -59,9 +59,9 @@ struct MenuBarView: View {
                     }
                 } label: {
                     if appModel.configStore.configuration.language == language {
-                        Label(language.label, systemImage: "checkmark")
+                        Label(appModel.languageMenuLabel(for: language), systemImage: "checkmark")
                     } else {
-                        Text(language.label)
+                        Text(appModel.languageMenuLabel(for: language))
                     }
                 }
             }

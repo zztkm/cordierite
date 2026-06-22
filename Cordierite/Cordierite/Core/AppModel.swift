@@ -12,6 +12,7 @@ final class AppModel {
     private(set) var lastTranscript: String?
     private(set) var assetDownloadFraction: Double?
     private(set) var permissionStatuses: [PermissionKind: PermissionStatus] = [:]
+    private(set) var resolvedSystemSpeechLocale: Locale?
 
     let configStore = ConfigStore()
     let permissionChecker = PermissionChecker()
@@ -65,6 +66,7 @@ final class AppModel {
 
             try await speechEngine.prepare(language: configStore.configuration.language)
             assetDownloadFraction = nil
+            await refreshResolvedSystemSpeechLocale()
         } catch {
             assetDownloadFraction = nil
             NSLog("Speech asset preparation failed: \(error.localizedDescription)")
@@ -130,7 +132,19 @@ final class AppModel {
         } catch {
             NSLog("Speech asset preparation failed: \(error.localizedDescription)")
         }
+        await refreshResolvedSystemSpeechLocale()
         refreshPermissionState()
+    }
+
+    func languageMenuLabel(for option: RecognitionLanguageOption) -> String {
+        RecognitionLanguageResolver.menuLabel(
+            for: option,
+            resolvedLocale: option == .system ? resolvedSystemSpeechLocale : nil
+        )
+    }
+
+    private func refreshResolvedSystemSpeechLocale() async {
+        resolvedSystemSpeechLocale = await RecognitionLanguageResolver.resolvedLocale(for: .system)
     }
 
     func prepareForRecording() async -> RecordingPrepResult {

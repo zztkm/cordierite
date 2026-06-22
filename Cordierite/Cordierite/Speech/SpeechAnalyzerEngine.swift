@@ -21,6 +21,10 @@ final class SpeechAnalyzerEngine: SpeechRecognitionEngine {
             throw SpeechEngineError.localeNotSupported
         }
 
+        NSLog(
+            "Speech engine preparing: option=\(language.rawValue), source=\(RecognitionLanguageResolver.locale(for: language).identifier), resolved=\(locale.identifier)"
+        )
+
         let transcriber = try await makeTranscriber(locale: locale)
         guard SpeechTranscriber.isAvailable else {
             throw SpeechEngineError.transcriberUnavailable
