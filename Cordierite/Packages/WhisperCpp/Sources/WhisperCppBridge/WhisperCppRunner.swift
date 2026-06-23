@@ -16,6 +16,8 @@ public enum WhisperCppBridgeError: Error, LocalizedError, Sendable {
 }
 
 public actor WhisperCppRunner {
+    private static let minimumSampleCount = 16_000
+
     private nonisolated(unsafe) let context: OpaquePointer
 
     public init(modelPath: String) throws {
@@ -35,13 +37,20 @@ public actor WhisperCppRunner {
     }
 
     public func warmup() throws {
-        let silence = [Float](repeating: 0, count: 16_000)
+        let silence = [Float](repeating: 0, count: Self.minimumSampleCount)
         _ = try transcribe(samples: silence, language: "en")
     }
 
     public func transcribe(samples: [Float], language: String?) throws -> String {
         guard !samples.isEmpty else {
             return ""
+        }
+
+        let processedSamples: [Float]
+        if samples.count < Self.minimumSampleCount {
+            processedSamples = samples + [Float](repeating: 0, count: Self.minimumSampleCount - samples.count)
+        } else {
+            processedSamples = samples
         }
 
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
@@ -53,7 +62,7 @@ public actor WhisperCppRunner {
         params.no_context = true
         params.n_threads = Int32(max(1, ProcessInfo.processInfo.activeProcessorCount - 1))
 
-        let code: Int32 = samples.withUnsafeBufferPointer { buffer in
+        let code: Int32 = processedSamples.withUnsafeBufferPointer { buffer in
             guard let baseAddress = buffer.baseAddress else {
                 return -1
             }
