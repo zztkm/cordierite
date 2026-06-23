@@ -18,6 +18,7 @@ final class AppModel {
     private(set) var whisperModelIsReady = false
     private(set) var downloadedWhisperModels: Set<WhisperModelOption> = []
     private(set) var whisperDownloadErrorMessage: String?
+    private(set) var recordingFeedback: RecordingFeedback?
 
     var selectedWhisperModel: WhisperModelOption {
         WhisperModelOption.resolved(from: configStore.configuration.whisper.model)
@@ -55,14 +56,21 @@ final class AppModel {
     }
 
     var downloadedWhisperModelsSummary: String {
-        let labels = WhisperModelOption.allCases
-            .filter { downloadedWhisperModels.contains($0) }
+        let labels = availableWhisperModelsForRecognition
             .map(\.engineSelectionLabel)
 
         if labels.isEmpty {
             return "None"
         }
         return labels.joined(separator: ", ")
+    }
+
+    var availableWhisperModelsForRecognition: [WhisperModelOption] {
+        WhisperModelOption.allCases.filter { downloadedWhisperModels.contains($0) }
+    }
+
+    var availableRecognitionSelections: [RecognitionSelection] {
+        [.appleSpeech] + availableWhisperModelsForRecognition.map { .whisper($0) }
     }
 
     func recognitionOptionLabel(for selection: RecognitionSelection) -> String {
@@ -75,11 +83,7 @@ final class AppModel {
     }
 
     func whisperRecognitionOptionLabel(for model: WhisperModelOption) -> String {
-        var label = "Whisper · \(model.menuLabel)"
-        if !isWhisperModelDownloaded(model) {
-            label += " · Not downloaded"
-        }
-        return label
+        "Whisper · \(model.menuLabel)"
     }
 
     func whisperModelManageLabel(for model: WhisperModelOption) -> String {
@@ -108,6 +112,10 @@ final class AppModel {
             await applyRecognitionEngineConfiguration()
 
         case .whisper(let model):
+            guard isWhisperModelDownloaded(model) else {
+                return
+            }
+
             let wasWhisper = configStore.configuration.recognitionEngine == .whisper
             let previousModel = selectedWhisperModel
 
@@ -215,6 +223,8 @@ final class AppModel {
         }
         downloadedWhisperModels = downloaded
 
+        await reconcileRecognitionSelectionIfNeeded()
+
         guard configStore.configuration.recognitionEngine == .whisper,
               let whisperEngine = speechEngine as? WhisperEngine else {
             whisperModelIsDownloaded = false
@@ -224,6 +234,18 @@ final class AppModel {
 
         whisperModelIsDownloaded = downloaded.contains(selectedWhisperModel)
         whisperModelIsReady = whisperEngine.isReady
+    }
+
+    private func reconcileRecognitionSelectionIfNeeded() async {
+        guard configStore.configuration.recognitionEngine == .whisper,
+              !isWhisperModelDownloaded(selectedWhisperModel) else {
+            return
+        }
+
+        NSLog("Whisper model is not downloaded; falling back to Apple Speech.")
+        configStore.update { $0.recognitionEngine = .appleSpeech }
+        configStore.save()
+        await applyRecognitionEngineConfiguration()
     }
 
     func applyWhisperModelConfiguration() async {
@@ -465,6 +487,7 @@ final class AppModel {
         }
 
         guard canStartRecognition else {
+            recordingFeedback = .whisperModelNotReady
             NSLog("Recording blocked: Whisper model is not ready.")
             return
         }
@@ -483,10 +506,14 @@ final class AppModel {
         let preparation = await prepareForRecording()
         guard case .ready(let microphoneJustGranted) = preparation else {
             stopRecordingAfterStart = false
+            if case .blocked(let issue) = preparation {
+                recordingFeedback = .blocked(by: issue)
+            }
             restoreIdleState()
             return
         }
 
+        recordingFeedback = nil
         liveTranscript = ""
 
         do {
@@ -505,6 +532,7 @@ final class AppModel {
         } catch {
             stopRecordingAfterStart = false
             await recoverOrphanedRecordingIfNeeded()
+            recordingFeedback = .startFailed(error)
             restoreIdleState()
             NSLog("Failed to start recording: \(error.localizedDescription)")
         }
@@ -558,15 +586,18 @@ final class AppModel {
                 }
             }
 
+            recordingFeedback = nil
             state = .ready
             reloadHotkeyMonitor()
         case .discardedSilence(let duration, let peakRMS):
             liveTranscript = ""
+            recordingFeedback = .silenceDiscarded
             NSLog("Recording discarded: \(duration)s, peak RMS \(peakRMS)")
             state = .ready
             reloadHotkeyMonitor()
         case .failed(let message):
             liveTranscript = ""
+            recordingFeedback = .recognitionFailed
             NSLog("Recording failed: \(message)")
             state = .ready
             reloadHotkeyMonitor()

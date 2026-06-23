@@ -9,7 +9,10 @@ struct CordieriteApp: App {
             MenuBarView()
                 .environment(appModel)
         } label: {
-            StatusLabel(state: appModel.state)
+            StatusLabel(
+                state: appModel.state,
+                recordingFeedback: appModel.recordingFeedback
+            )
         }
         .menuBarExtraStyle(.menu)
 

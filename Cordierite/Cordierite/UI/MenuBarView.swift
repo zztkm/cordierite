@@ -34,6 +34,11 @@ struct MenuBarView: View {
             Divider()
         }
 
+        if let feedback = appModel.recordingFeedback, shouldShowRecordingFeedbackBanner(feedback) {
+            recordingFeedbackBanner(feedback)
+            Divider()
+        }
+
         if appModel.state == .recording, !appModel.liveTranscript.isEmpty {
             Text(appModel.liveTranscript)
                 .font(.caption)
@@ -154,15 +159,17 @@ struct MenuBarView: View {
                 recognitionOptionLabel(.appleSpeech)
             }
 
-            Divider()
+            if !appModel.availableWhisperModelsForRecognition.isEmpty {
+                Divider()
 
-            ForEach(WhisperModelOption.allCases) { model in
-                Button {
-                    Task {
-                        await appModel.applyRecognitionSelection(.whisper(model))
+                ForEach(appModel.availableWhisperModelsForRecognition) { model in
+                    Button {
+                        Task {
+                            await appModel.applyRecognitionSelection(.whisper(model))
+                        }
+                    } label: {
+                        recognitionOptionLabel(.whisper(model))
                     }
-                } label: {
-                    recognitionOptionLabel(.whisper(model))
                 }
             }
         }
@@ -232,6 +239,34 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder
+    private func recordingFeedbackBanner(_ feedback: RecordingFeedback) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(feedback.title)
+                .font(.caption)
+                .foregroundStyle(.red)
+
+            if let message = feedback.message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            switch feedback.action {
+            case .openPermissionDoctor:
+                Button("Fix in Permission Doctor…") {
+                    openWindow(id: "permissionDoctor")
+                }
+            case .reloadMicrophones:
+                Button("Reload Devices") {
+                    appModel.refreshMicrophoneList()
+                }
+            case nil:
+                EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder
     private var setupBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let issue = appModel.setupIssues.first {
@@ -244,6 +279,13 @@ struct MenuBarView: View {
                 openWindow(id: "permissionDoctor")
             }
         }
+    }
+
+    private func shouldShowRecordingFeedbackBanner(_ feedback: RecordingFeedback) -> Bool {
+        if appModel.state == .needsSetup, feedback.action == .openPermissionDoctor {
+            return false
+        }
+        return true
     }
 
     private func handleRecordingButton() async {
