@@ -2,9 +2,10 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
-enum AudioCaptureError: LocalizedError {
+enum AudioCaptureError: LocalizedError, Equatable {
     case engineStartFailed
     case deviceNotFound
+    case noInputReceived
 
     var errorDescription: String? {
         switch self {
@@ -12,7 +13,62 @@ enum AudioCaptureError: LocalizedError {
             "Could not start audio capture."
         case .deviceNotFound:
             "No microphone input device found."
+        case .noInputReceived:
+            "Microphone input did not become active."
         }
+    }
+}
+
+private nonisolated final class FirstAudioBufferGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var result: Result<Void, Error>?
+
+    nonisolated func signalIfNeeded(buffer: AVAudioPCMBuffer) {
+        guard buffer.frameLength > 0 else {
+            return
+        }
+
+        finish(with: .success(()))
+    }
+
+    nonisolated func wait(timeout: Duration) async throws {
+        let timeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            self?.finish(with: .failure(AudioCaptureError.noInputReceived))
+        }
+
+        defer {
+            timeoutTask.cancel()
+        }
+
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            if let result {
+                lock.unlock()
+                continuation.resume(with: result)
+                return
+            }
+
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    private nonisolated func finish(with result: Result<Void, Error>) {
+        let continuation: CheckedContinuation<Void, Error>?
+
+        lock.lock()
+        guard self.result == nil else {
+            lock.unlock()
+            return
+        }
+        self.result = result
+        continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+
+        continuation?.resume(with: result)
     }
 }
 
@@ -25,7 +81,7 @@ final class AudioCaptureSession {
         engine.inputNode.outputFormat(forBus: 0)
     }
 
-    func start(deviceUID: String?, tapHandler: @escaping AVAudioNodeTapBlock) throws {
+    func start(deviceUID: String?, tapHandler: @escaping AVAudioNodeTapBlock) async throws {
         guard !isCapturing else {
             return
         }
@@ -36,8 +92,13 @@ final class AudioCaptureSession {
 
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        let firstBufferGate = FirstAudioBufferGate()
+        let gatedTapHandler = Self.makeGatedTapHandler(
+            firstBufferGate: firstBufferGate,
+            tapHandler: tapHandler
+        )
         inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapHandler)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: gatedTapHandler)
 
         engine.prepare()
         do {
@@ -48,6 +109,13 @@ final class AudioCaptureSession {
         }
 
         isCapturing = true
+
+        do {
+            try await waitForFirstInputBuffer(firstBufferGate)
+        } catch {
+            stop()
+            throw error
+        }
     }
 
     func stop() {
@@ -145,5 +213,19 @@ final class AudioCaptureSession {
         }
 
         return uid.takeRetainedValue() as String
+    }
+
+    private func waitForFirstInputBuffer(_ gate: FirstAudioBufferGate) async throws {
+        try await gate.wait(timeout: .seconds(1))
+    }
+
+    private nonisolated static func makeGatedTapHandler(
+        firstBufferGate: FirstAudioBufferGate,
+        tapHandler: @escaping AVAudioNodeTapBlock
+    ) -> AVAudioNodeTapBlock {
+        { buffer, time in
+            firstBufferGate.signalIfNeeded(buffer: buffer)
+            tapHandler(buffer, time)
+        }
     }
 }

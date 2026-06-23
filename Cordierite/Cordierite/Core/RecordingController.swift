@@ -124,15 +124,23 @@ final class RecordingController {
         }
 
         do {
-            try audioCapture.start(deviceUID: deviceUID, tapHandler: tapHandler)
+            try await audioCapture.start(deviceUID: deviceUID, tapHandler: tapHandler)
         } catch {
-            guard retry else {
+            guard shouldRetryAudioCapture(after: error, requestedRetry: retry) else {
                 throw error
             }
 
             try await Task.sleep(for: .milliseconds(150))
-            try audioCapture.start(deviceUID: deviceUID, tapHandler: tapHandler)
+            try await audioCapture.start(deviceUID: deviceUID, tapHandler: tapHandler)
         }
+    }
+
+    private func shouldRetryAudioCapture(after error: Error, requestedRetry: Bool) -> Bool {
+        if requestedRetry {
+            return true
+        }
+
+        return (error as? AudioCaptureError) == .noInputReceived
     }
 
     private func rollbackFailedStart() async {
