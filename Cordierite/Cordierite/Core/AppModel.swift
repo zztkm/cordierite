@@ -283,21 +283,16 @@ final class AppModel {
         state = .loading
         loadingStatusMessage = "Downloading \(model.shortLabel)…"
 
-        let progressTask: Task<Void, Never>?
-        if configStore.configuration.recognitionEngine == .whisper,
-           selectedWhisperModel == model,
-           let whisperEngine = speechEngine as? WhisperEngine {
-            progressTask = Task {
-                while !Task.isCancelled {
-                    assetDownloadFraction = whisperEngine.downloadProgress?.fractionCompleted
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
+        let downloadProgress = Progress()
+        let progressTask = Task {
+            while !Task.isCancelled {
+                let fraction = downloadProgress.fractionCompleted
+                assetDownloadFraction = fraction > 0 && fraction < 1 ? fraction : nil
+                try? await Task.sleep(for: .milliseconds(100))
             }
-        } else {
-            progressTask = nil
         }
         defer {
-            progressTask?.cancel()
+            progressTask.cancel()
             assetDownloadFraction = nil
             loadingStatusMessage = nil
         }
@@ -306,9 +301,9 @@ final class AppModel {
             if configStore.configuration.recognitionEngine == .whisper,
                selectedWhisperModel == model,
                let whisperEngine = speechEngine as? WhisperEngine {
-                try await whisperEngine.downloadSelectedModel()
+                try await whisperEngine.downloadSelectedModel(progress: downloadProgress)
             } else {
-                _ = try await WhisperModelStore.shared.download(modelID: model.rawValue)
+                _ = try await WhisperModelStore.shared.download(modelID: model.rawValue, progress: downloadProgress)
                 if configStore.configuration.recognitionEngine == .whisper,
                    selectedWhisperModel == model {
                     await applyWhisperModelConfiguration()

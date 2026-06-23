@@ -61,18 +61,17 @@ final class WhisperEngine: SpeechRecognitionEngine {
         try await loadRunnerIfNeeded()
     }
 
-    func downloadSelectedModel() async throws {
+    func downloadSelectedModel(progress: Progress? = nil) async throws {
         let modelID = whisperConfiguration.model
-        let progress = Progress(totalUnitCount: 0)
-        progress.kind = .file
-        downloadProgress = progress
+        let activeProgress = progress ?? Progress()
+        downloadProgress = activeProgress
 
         defer {
             downloadProgress = nil
         }
 
         do {
-            let modelPath = try await modelStore.download(modelID: modelID)
+            let modelPath = try await modelStore.download(modelID: modelID, progress: activeProgress)
             runner = nil
             loadedModelID = nil
             try await loadRunner(modelPath: modelPath.path, modelID: modelID)

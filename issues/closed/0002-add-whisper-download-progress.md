@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-22
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-06-23
 - Model: Composer 2.5
 - Branch: feature/add-whisper-download-progress
 - Polished: {YYYY-MM-DD}
@@ -33,5 +33,6 @@ Medium。大容量モデル（~1.5 GB）の DL では不定表示だけでは UX
 
 ## 解決方法
 
-- `Cordierite/Cordierite/Speech/WhisperModelStore.swift` の download 実装を進捗対応に変更する
-- 必要なら `AppModel.downloadWhisperModel` の progress ポーリングを調整する
+- `WhisperModelStore.download` を `URLSessionDownloadDelegate` ベースの `ProgressReportingDownloader` に変更し、HTTP `Content-Length` またはモデル推定サイズで `Progress` を更新する
+- `WhisperModelOption.estimatedByteCount` を追加し、サーバーがサイズを返さない場合のフォールバックに使う
+- `WhisperEngine.downloadSelectedModel(progress:)` と `AppModel.downloadWhisperModel` で共通の `Progress` をポーリングし、メニューバーに % 表示する

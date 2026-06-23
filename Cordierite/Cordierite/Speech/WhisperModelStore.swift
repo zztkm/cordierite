@@ -89,6 +89,19 @@ enum WhisperModelOption: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    nonisolated var estimatedByteCount: Int64 {
+        switch self {
+        case .largeV3TurboQ5_0:
+            500 * 1024 * 1024
+        case .largeV3TurboQ8_0:
+            800 * 1024 * 1024
+        case .largeV3Turbo:
+            1_500 * 1024 * 1024
+        case .base:
+            140 * 1024 * 1024
+        }
+    }
+
     nonisolated var sourceRepository: String {
         "ggerganov/whisper.cpp"
     }
@@ -137,6 +150,83 @@ enum WhisperModelCatalog: Sendable {
     }
 }
 
+private final class ProgressReportingDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let progress: Progress
+    private let estimatedByteCount: Int64
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
+    private lazy var session: URLSession = URLSession(
+        configuration: .default,
+        delegate: self,
+        delegateQueue: OperationQueue()
+    )
+
+    init(progress: Progress, estimatedByteCount: Int64) {
+        self.progress = progress
+        self.estimatedByteCount = estimatedByteCount
+        progress.kind = .file
+    }
+
+    func download(from url: URL) async throws -> (URL, URLResponse) {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+            session.downloadTask(with: url).resume()
+        }
+    }
+
+    private func finish(with result: Result<(URL, URLResponse), Error>) {
+        lock.lock()
+        guard let continuation else {
+            lock.unlock()
+            return
+        }
+        self.continuation = nil
+        lock.unlock()
+
+        switch result {
+        case .success(let value):
+            continuation.resume(returning: value)
+        case .failure(let error):
+            continuation.resume(throwing: error)
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        if totalBytesExpectedToWrite > 0 {
+            progress.totalUnitCount = totalBytesExpectedToWrite
+        } else if progress.totalUnitCount == 0, estimatedByteCount > 0 {
+            progress.totalUnitCount = estimatedByteCount
+        }
+        progress.completedUnitCount = totalBytesWritten
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let response = downloadTask.response else {
+            finish(with: .failure(WhisperModelStoreError.downloadFailed))
+            return
+        }
+        finish(with: .success((location, response)))
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error {
+            finish(with: .failure(error))
+        }
+    }
+}
+
 actor WhisperModelStore {
     static let shared = WhisperModelStore()
 
@@ -155,7 +245,7 @@ actor WhisperModelStore {
         return FileManager.default.fileExists(atPath: url.path)
     }
 
-    func download(modelID: String) async throws -> URL {
+    func download(modelID: String, progress: Progress? = nil) async throws -> URL {
         let destination = try localURL(for: modelID)
         if FileManager.default.fileExists(atPath: destination.path) {
             return destination
@@ -163,8 +253,16 @@ actor WhisperModelStore {
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
+        let normalizedID = WhisperModelCatalog.normalizedModelID(modelID)
+        let model = WhisperModelOption.resolved(from: normalizedID)
         let remoteURL = try WhisperModelCatalog.remoteURL(for: modelID)
-        let (temporaryURL, response) = try await URLSession.shared.download(from: remoteURL)
+
+        let downloadProgress = progress ?? Progress()
+        let downloader = ProgressReportingDownloader(
+            progress: downloadProgress,
+            estimatedByteCount: model.estimatedByteCount
+        )
+        let (temporaryURL, response) = try await downloader.download(from: remoteURL)
         defer {
             try? FileManager.default.removeItem(at: temporaryURL)
         }
@@ -177,6 +275,8 @@ actor WhisperModelStore {
             try FileManager.default.removeItem(at: destination)
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
+
+        downloadProgress.completedUnitCount = downloadProgress.totalUnitCount
 
         return destination
     }
