@@ -59,7 +59,7 @@ struct SettingsView: View {
 
                 Section("Recognition") {
                     Picker("Recognition", selection: recognitionSelectionBinding) {
-                        ForEach(RecognitionSelection.allCases) { selection in
+                        ForEach(appModel.availableRecognitionSelections) { selection in
                             Text(appModel.recognitionOptionLabel(for: selection)).tag(selection)
                         }
                     }
