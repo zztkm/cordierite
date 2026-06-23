@@ -576,7 +576,7 @@ final class AppModel {
 
             guard !processedTranscript.isEmpty else {
                 liveTranscript = ""
-                recordingFeedback = .silenceDiscarded
+                recordingFeedback = .textRemovedByCleanup
                 NSLog("Recording discarded after post-processing: \(duration)s, peak RMS \(peakRMS)")
                 state = .ready
                 reloadHotkeyMonitor()

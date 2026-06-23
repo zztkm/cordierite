@@ -1,8 +1,8 @@
 import Foundation
 
 enum TextPostProcessor {
-    private static let japaneseFillerPattern = #"(?<=[\s、。！？，]|^)(?:えー+|ええと|えっと|あの|その|まあ|なんか|うー+|んー+)[、]?(?=[\s、。！？，]|$)"#
-    private static let englishFillerPattern = #"\b(?:uh|um|er|ah|hmm|hm)\b[,]?\s*"#
+    private static let japaneseFillerPattern = #"(?<=[\s、。！？，]|^)(?:えー+|ええと|えっと|うー+|んー+)[、]?(?=[\s、。！？，]|$)"#
+    private static let englishFillerPattern = #"\b(?:uh|um|er|hmm|hm)\b[,]?\s*"#
 
     static func process(_ text: String, removeFillerWords: Bool) -> String {
         var result = normalizeWhitespace(text)
