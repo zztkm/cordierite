@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-22
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-06-23
 - Model: Composer 2.5
 - Branch: feature/change-readme-setup-guide
 - Polished: {YYYY-MM-DD}
@@ -31,4 +31,4 @@ Low。アプリ内 UI と Permission Doctor で操作は可能だが、オンボ
 
 ## 解決方法
 
-- `README.md` を拡充する
+- `README.md` に要件、ビルド手順（Xcode / xcodebuild）、初回権限設定、基本操作、Whisper モデル DL 手順、推奨モデル目安、仕様書リンクを追記した
