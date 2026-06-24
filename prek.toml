@@ -1,0 +1,59 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+# 全フック共通のステージ
+default_stages = ["pre-commit"]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "build"
+name = "Build"
+language = "system"
+entry = "xcodebuild"
+args = [
+  "-project",
+  "Cordierite/Cordierite.xcodeproj",
+  "-scheme",
+  "Cordierite",
+  "-configuration",
+  "Debug",
+  "-destination",
+  "platform=macOS",
+  "build",
+]
+pass_filenames = false
+
+[[repos.hooks]]
+id = "swift-format-fix"
+name = "swift format fix"
+language = "system"
+entry = "swift"
+args = ["format", "--in-place"]
+files = '^Cordierite/.*\.swift$'
+
+[[repos.hooks]]
+id = "swift-format-check"
+name = "swift format check"
+language = "system"
+entry = "swift"
+args = ["format", "lint", "--strict", "--parallel"]
+files = '^Cordierite/.*\.swift$'
+
+[[repos.hooks]]
+id = "swiftlint-fix"
+name = "SwiftLint fix"
+language = "system"
+entry = "swiftlint"
+args = ["--fix"]
+files = '^Cordierite/.*\.swift$'
+
+[[repos.hooks]]
+id = "swiftlint-check"
+name = "SwiftLint check"
+language = "system"
+entry = "swiftlint"
+args = ["--strict"]
+files = '^Cordierite/.*\.swift$'
