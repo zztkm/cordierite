@@ -5,34 +5,56 @@
 - Completed: {YYYY-MM-DD}
 - Model: Composer 2.5
 - Branch: feature/change-benchmark-speech-engines
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-06-24
 
 ## 目的
 
-仕様書 Milestone 5 に沿い、同じ音声セットで Apple Speech と Whisper の品質・遅延・メモリを記録し、エンジン選択の判断材料を残す。
+仕様書 Milestone 5 と「精度評価」節（`docs/macos-app-spec.md`）に沿い、同一音声セットで Apple Speech と Whisper の品質・遅延・メモリを手動計測し、エンジン選択の判断材料を文書化する。
 
 ## 優先度根拠
 
-Medium。日本語では Whisper の方が精度が高いとの手動評価があるが、定量データと英語結果が未整理。
+Medium。日本語では Whisper の方が精度が高いとの手動評価があるが、定量データと英語結果が未整理。Milestone 6（Whisper 実装）は完了済みだが Milestone 5 は未実施。
 
 ## 現状
 
-- 仕様書は CER / WER / キー解放から貼り付けまでの時間 / 常駐メモリ / 失敗率を評価指標としている
-- 比較用音声セットや結果の記録場所がない
-- Milestone 6 は実装済みだが Milestone 5 は未実施
+- 仕様書は CER / WER / キー解放から貼り付けまでの時間 / 常駐メモリ / 失敗率を評価指標としている（`docs/macos-app-spec.md` 487–488 行付近）
+- 比較用の固定音声セット、計測手順、結果の記録場所がリポジトリにない
+- 自動ベンチスクリプトや CI 連携は存在しない
+- 本 issue は **手動計測 + markdown 記録** のみ。コード変更は仕様書の Milestone 5 更新程度に留める
 
 ## 設計方針
 
-- 短文 5〜10 本程度の固定音声（日本語・英語）で比較する
-- 結果は `docs/` 配下の比較メモ（または仕様書追記）に残す
-- 自動ベンチスクリプト化は本 issue の範囲外とする
+- 短文 5〜10 本程度の固定音声を用意する（日本語 3 本以上、英語 3 本以上）
+  - 例: 固有名詞を含む日本語、数字を含む日本語、短い英語コマンド、長めの英語文
+  - 音声ファイルは `docs/benchmark/audio/` に WAV で置く（リポジトリサイズが大きくなる場合は計測手順だけを文書化し、ファイルはオプションとする）
+- 比輡対象エンジン
+  - **Apple Speech**: 既定、`RecognitionLanguageOption` を ja / en に合わせて計測
+  - **Whisper**: 既定モデル `large-v3-turbo-q5_0`（`WhisperModelOption.default`）
+- 結果は `docs/benchmark/speech-engine-comparison.md` にまとめる
+- 遅延は「録音停止（ホットキー解放）から貼り付け完了まで」を stopwatch または `NSLog` タイムスタンプで概算する
+- CER / WER は参照テキストと認識結果を目視または簡易スプレッドシートで算出する（自動化は本 issue 範囲外）
+- 常駐メモリは Activity Monitor で Apple Speech 待機時 / Whisper ready 時を記録する
+- 計測完了後、`docs/macos-app-spec.md` の Milestone 5 を「完了」に更新する（`0001-doc-update-macos-app-spec` と同様の体裁）
+
+## 変更対象
+
+| 種別 | パス |
+|---|---|
+| 新規 | `docs/benchmark/speech-engine-comparison.md` |
+| 新規（任意） | `docs/benchmark/audio/*.wav` |
+| 更新 | `docs/macos-app-spec.md`（Milestone 5 ステータス） |
 
 ## 完了条件
 
-- 同一音声に対する Apple Speech / Whisper（既定モデル）の比較結果が文書化されている
-- 遅延（録音終了から貼り付けまで）の概算が記載されている
+- [ ] 同一音声セットに対する Apple Speech / Whisper（`large-v3-turbo-q5_0`）の比較結果が `docs/benchmark/speech-engine-comparison.md` に記載されている
+- [ ] 日本語・英語それぞれ少なくとも 1 本ずつ計測している
+- [ ] 遅延（録音停止から貼り付けまで）の概算が記載されている
+- [ ] CER または WER の算出方法と結果（少なくとも代表例）が記載されている
+- [ ] 仕様書 Milestone 5 が完了扱いに更新されている
 
-## 解決方法
+## 実装方針
 
-- テスト用音声と手順を定義し、計測結果を markdown にまとめる
-- 必要なら仕様書 Milestone 5 を完了扱いに更新する（`0001-doc-update-macos-app-spec` と調整）
+1. 参照テキスト付きの短文音声を用意し、計測環境（macOS バージョン、マイク、Xcode ビルド）を文書先頭に記載する
+2. 各エンジンで同じ Hold to Talk 手順を踏み、認識結果・遅延・メモリを表形式で記録する
+3. 結果 markdown を追加し、仕様書 Milestone 5 を更新する
+4. アプリコードの変更は不要（仕様書更新のみ）
