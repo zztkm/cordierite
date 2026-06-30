@@ -113,7 +113,7 @@ struct MenuBarView: View {
       appModel.applyInputConfiguration()
     }
 
-    Picker(appModel.recognitionMenuTitle, selection: recognitionSelectionBinding) {
+    Picker("Recognition", selection: recognitionSelectionBinding) {
       ForEach(appModel.availableRecognitionSelections) { selection in
         Text(appModel.recognitionOptionLabel(for: selection)).tag(selection)
       }

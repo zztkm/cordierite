@@ -42,10 +42,6 @@ final class AppModel {
     return true
   }
 
-  var recognitionMenuTitle: String {
-    "Recognition: \(recognitionOptionLabel(for: currentRecognitionSelection))"
-  }
-
   var currentRecognitionSelection: RecognitionSelection {
     switch configStore.configuration.recognitionEngine {
     case .appleSpeech:
