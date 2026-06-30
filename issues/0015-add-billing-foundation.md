@@ -101,7 +101,6 @@ Low。機能 MVP 完成後の収益化フェーズ。Stripe Dashboard で Produc
 - ライセンスキー認証
 - Stripe 本番環境への切替作業（手順は doc に記載、実施はリリース時）
 - 0013 / 0014 の本実装
-- `docs/macos-app-spec.md` 収益化節の文言更新（follow-up で可）
 
 ## 依存関係
 
