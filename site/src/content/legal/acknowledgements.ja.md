@@ -13,7 +13,6 @@ Cordierite は次の第三者オープンソースソフトウェアを利用し
 ## whisper.cpp
 
 - [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
-- [ggml](https://github.com/ggml-org/ggml)
 
 Copyright (c) 2023-2026 The ggml authors
 

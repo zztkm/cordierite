@@ -13,7 +13,6 @@ Cordierite uses the following third-party open-source software. The MIT licenses
 ## whisper.cpp
 
 - [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
-- [ggml](https://github.com/ggml-org/ggml)
 
 Copyright (c) 2023-2026 The ggml authors
 
